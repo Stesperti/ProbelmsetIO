@@ -104,7 +104,7 @@ println("--------------------------------")
 println("Problem 2.4")
 println("--------------------------------")
 using FastGaussQuadrature
-function gh_estimate_1D(k; X, mu, sigma)
+function gh_quadrature(k; X, mu, sigma)
     # mean along X
     m = if mu isa Number && X isa Number
         X * mu
@@ -132,15 +132,15 @@ function gh_estimate_1D(k; X, mu, sigma)
 
     # GH nodes/weights (weighting exp(-x^2))
     x, w = gausshermite(k)
-    nodes   = @. m + s * sqrt(2) * x
-    weights = w ./ sqrt(pi)           # normalize
+    nodes   = m .+ s .* sqrt(2) .* x
+    weights = w ./ sqrt(pi)
 
     return dot(weights, binomiallogit.(nodes))
 end
 
-GH4   = gh_estimate_1D(4, X=X, mu=mu, sigma=sigma)
-GH12  = gh_estimate_1D(12, X=X, mu=mu, sigma=sigma)
-GH8   = gh_estimate_1D(8, X=X, mu=mu, sigma=sigma) #odd one
+GH4   = gh_quadrature(4, X=X, mu=mu, sigma=sigma)
+GH12  = gh_quadrature(12, X=X, mu=mu, sigma=sigma)
+GH8   = gh_quadrature(8, X=X, mu=mu, sigma=sigma) #odd one
 
 
 # 5 compare results
@@ -176,40 +176,79 @@ mean200_2 = montecarlo_integration(t -> binomiallogit(t), Normal(m, s), 200)
 mean400_2 = montecarlo_integration(t -> binomiallogit(t), Normal(m, s), 400)
 
 # 7 create latex table
+println("--------------------------------")
+println("Problem 2.7")
+println("--------------------------------")
+
 using DataFrames, Latexify, Printf
 
 # helper: 6-decimal strings; blank for missing
 fmt6(x) = ismissing(x) ? "" : @sprintf("%.6f", x)
 
-# ---------- 1D ----------
-methods1 = ["QuadGK","MC 200","MC 400","GH 4","GH 8","GH 12"]
-vals1    = [quad_1,  mean200_1, mean400_1, GH4,  GH8,  GH12]
-df1 = DataFrame(Dict(:Method => methods1, Symbol("1D value") => vals1))
-tab1 = String(latexify(df1; env=:table, latex=false))
+using DataFrames, Latexify
+
+# -------------------- 1D --------------------
+methods1 = ["QuadGK, True Value", "MC 200", "MC 400", "GH 4", "GH 8", "GH 12"]
+vals1    = [quad_1, mean200_1, mean400_1, GH4, GH8, GH12]
+npoints1 = ["—", 200, 400, 4, 8, 12]
+
+abs_err1 = [abs(v - quad_1) for v in vals1]
+rel_err1 = [iszero(quad_1) ? missing : abs(v - quad_1) / abs(quad_1) * 100 for v in vals1]
+
+abs_err1[1] = 0.0
+
+rel_err1[1] = 0.0
+
+df1 = DataFrame(
+    :Method => methods1,
+    :Value => round.(vals1, digits=6),
+    Symbol("Abs. error") => round.(abs_err1, digits=6),
+    Symbol("Rel. error") => round.(rel_err1, digits=6),
+    Symbol("N points") => npoints1
+)
+
+tab1 = String(latexify(df1, env=:tabular, latex=false))
 latex_table1 = """
 \\begin{table}[htbp]
 \\centering
 $tab1
-\\caption{1D integration results.}
+\\caption{1D integration results: value, error, and number of points.}
 \\label{tab:results-1d}
 \\end{table}
 """
 println(latex_table1)
 
-# ---------- 2D ----------
-methods2 = ["QuadGK","MC 200","MC 400"]
-vals2    = [quad_2,  mean200_2, mean400_2]
-df2 = DataFrame(Dict(:Method => methods2, Symbol("2D value") => vals2))
-tab2 = String(latexify(df2; env=:tabular, latex=false))
+# -------------------- 2D --------------------
+methods2 = ["QuadGK, True Value", "MC 200", "MC 400"]
+vals2    = [quad_2, mean200_2, mean400_2]
+npoints2 = ["—", 200, 400]
+
+abs_err2 = [abs(v - quad_2) for v in vals2]
+rel_err2 = [iszero(quad_2) ? missing : abs(v - quad_2) / abs(quad_2) * 100 for v in vals2]
+
+abs_err2[1] = 0.0
+
+rel_err2[1] = 0.0
+
+df2 = DataFrame(
+    :Method => methods2,
+    :Value => round.(vals2, digits=6),
+    Symbol("Abs. error") => round.(abs_err2, digits=6),
+    Symbol("Rel. error") => round.(rel_err2, digits=6),
+    Symbol("N points") => npoints2
+)
+
+tab2 = String(latexify(df2, env=:tabular, latex=false))
 latex_table2 = """
 \\begin{table}[htbp]
 \\centering
 $tab2
-\\caption{2D integration results.}
+\\caption{2D integration results: value, error, and number of points.}
 \\label{tab:results-2d}
 \\end{table}
 """
 println(latex_table2)
+
 
 
 # 8 binomiallogitmixture
@@ -227,7 +266,7 @@ function binomiallogitmixture(X, mu, sigma, methods)
     elseif methods == :montecarlo
         return montecarlo_integration(t -> binomiallogit(t), Normal(m, s), 1000)
     elseif methods == :gh
-        return gh_estimate_1D(12, X=X, mu=mu, sigma=sigma)
+        return gh_quadrature(12, X=X, mu=mu, sigma=sigma)
     else
         error("Unknown method: $methods")
     end
